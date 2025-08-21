@@ -1,0 +1,17 @@
+[package]
+name = "optimize"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+minifb = { version = "0.28" }
+once_cell = "1.21"
+image = { version = "0.25" }
+allocative = "0.3"
+
+[profile.release]
+opt-level = 3
+strip = true
+lto = true
+panic = "abort"
+codegen-units = 1
