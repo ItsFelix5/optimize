@@ -127,7 +127,7 @@ impl Widget for Image {
         let arc = image.get(state);
         let buf = arc.read().unwrap();
 
-        if let Some(ref buf) = *buf_lock {
+        if let Some(ref buf) = buf {
             state
                 .buffer
                 .copy_from(buf, self.pos.x, self.pos.y as i32 - state.view.scroll as i32);
