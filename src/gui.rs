@@ -4,7 +4,7 @@ use std::ops::Deref;
 pub struct View {
     widgets: Vec<Box<dyn Widget>>,
     pub height: u32,
-    pub scroll: u32
+    pub scroll: u32,
 }
 
 impl View {
@@ -15,14 +15,14 @@ impl View {
         View {
             widgets,
             height: 0,
-            scroll: 0
+            scroll: 0,
         }
     }
 
     pub fn resize(state: &mut State) {
         let mut widgets = std::mem::take(&mut state.view.widgets);
         for widget in widgets.iter_mut() {
-            widget.resize(state)
+            widget.resize(state);
         }
         state.view.widgets = widgets;
     }
@@ -47,12 +47,7 @@ pub trait Widget {
 #[derive(Default)]
 struct Gallery {
     viewport: Vec2,
-    children: Vec<GalleryImage>
-}
-
-struct GalleryImage {
-    pos: Vec2,
-    image_index: usize,
+    children: Vec<Image>,
 }
 
 impl Widget for Gallery {
@@ -69,10 +64,13 @@ impl Widget for Gallery {
 
         if self.children.is_empty() {
             for (index, _) in state.library.images.iter().enumerate() {
-                self.children.push(GalleryImage {
+                let mut img = Image {
                     pos: Vec2::zero(),
-                    image_index: index
-                })
+                    size: Vec2::zero(),
+                    index,
+                };
+                img.resize(state);
+                self.children.push(img);
             }
         }
 
@@ -80,7 +78,7 @@ impl Widget for Gallery {
         let mut top = 20i32;
         let mut row_height = 0;
         for image in &mut self.children {
-            let size = state.library.images[image.image_index].size;
+            let size = image.size();
             if left + size.x > self.viewport.x - 20 {
                 left = 20;
                 top += (row_height + 20) as i32;
@@ -91,7 +89,6 @@ impl Widget for Gallery {
             }
 
             image.pos = Vec2::from(left, top as u32);
-
             left += size.x + 20;
         }
         state.view.height = top as u32 + row_height + 20;
@@ -100,40 +97,44 @@ impl Widget for Gallery {
     fn draw(&mut self, state: &mut State) {
         for widget in self.children.iter() {
             let y = (widget.pos.y as i32) - state.view.scroll as i32;
-            let image = &state.library.images[widget.image_index];
-            if y > -(image.size.y as i32) && y < self.viewport.y as i32 {
-                state.buffer.copy_from(
-                    image.get(state).deref(),
-                    widget.pos.x,
-                    widget.pos.y as i32 - state.view.scroll as i32
-                );
+            if y > -(widget.size().y as i32) && y < self.viewport.y as i32 {
+                widget.draw(state);
             }
         }
     }
 }
 
-struct Image<'a> {
-    inner: &'a crate::library::Image,
+struct Image {
+    index: usize,
     pos: Vec2,
+    size: Vec2,
 }
 
-impl<'a> Widget for Image<'a> {
+impl Widget for Image {
     fn pos(&self, scroll: u32) -> Vec2 {
         self.pos.sub2(0, scroll)
     }
 
     fn size(&self) -> Vec2 {
-        self.inner.size
+        self.size
+    }
+
+    fn resize(&mut self, state: &mut State) {
+        self.size = state.library.images[self.index].size;
     }
 
     fn draw(&mut self, state: &mut State) {
-        state.buffer.copy_from(self.inner.get(state).deref(), self.pos.x, self.pos.y as i32 - state.view.scroll as i32);
+        if let Some(ref buf) = *state.library.images[self.index].get(state).read().unwrap() {
+            state
+                .buffer
+                .copy_from(buf, self.pos.x, self.pos.y as i32 - state.view.scroll as i32);
+        }
     }
 }
 
 #[derive(Default)]
 struct Scrollbar {
-    viewport: Vec2
+    viewport: Vec2,
 }
 
 impl Widget for Scrollbar {
@@ -155,11 +156,7 @@ impl Widget for Scrollbar {
         }
 
         let x = self.viewport.x - 5;
-        let length = if height <= viewport {
-            viewport
-        } else {
-            (viewport / height * viewport).max(10.0)
-        };
+        let length = (viewport / height * viewport).max(10.0);
 
         let max_scroll = (height - viewport).max(1.0);
         let max_y = (viewport - length).max(0.0);
