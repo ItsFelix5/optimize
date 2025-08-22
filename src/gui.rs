@@ -124,7 +124,8 @@ impl Widget for Image {
 
     fn draw(&mut self, state: &mut State) {
         let mut image = state.library.images.remove(self.index);
-        let buf_lock = image.get(&mut state).read().unwrap();
+        let arc = image.get(state);
+        let buf = arc.read().unwrap();
 
         if let Some(ref buf) = *buf_lock {
             state
