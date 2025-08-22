@@ -65,11 +65,14 @@ impl Image {
             Err(_) => return,
         };
 
-        *buf = Some(image.scale(Vec2::from(image.width().min(500), image.height().min(500))));
+        let (w, h) = (image.width() as f32, image.height() as f32);
+        let scale = (500.0 / w).min(500.0 / h);
+
+        *buf = Some(image.scale(Vec2::from((w * scale).round() as u32, (h * scale).round() as u32)));
     }
 
     pub fn loaded(&self) -> bool {
-        self.buffer.borrow().is_some()
+        self.buffer.read().unwrap().is_some()
     }
 }
 
