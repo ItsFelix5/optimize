@@ -1,5 +1,4 @@
 use crate::{Vec2, State};
-use std::ops::Deref;
 
 pub struct View {
     widgets: Vec<Box<dyn Widget>>,
@@ -63,7 +62,7 @@ impl Widget for Gallery {
         self.viewport = state.buffer.size;
 
         if self.children.is_empty() {
-            for (index, _) in state.library.images.iter().enumerate() {
+            for index in 0..state.library.images.len() {
                 let mut img = Image {
                     pos: Vec2::zero(),
                     size: Vec2::zero(),
@@ -95,7 +94,7 @@ impl Widget for Gallery {
     }
 
     fn draw(&mut self, state: &mut State) {
-        for widget in self.children.iter() {
+        for widget in self.children.iter_mut() {
             let y = (widget.pos.y as i32) - state.view.scroll as i32;
             if y > -(widget.size().y as i32) && y < self.viewport.y as i32 {
                 widget.draw(state);
@@ -124,11 +123,16 @@ impl Widget for Image {
     }
 
     fn draw(&mut self, state: &mut State) {
-        if let Some(ref buf) = *state.library.images[self.index].get(state).read().unwrap() {
+        let mut image = state.library.images.remove(self.index);
+        let buf_lock = image.get(&mut state).read().unwrap();
+
+        if let Some(ref buf) = *buf_lock {
             state
                 .buffer
                 .copy_from(buf, self.pos.x, self.pos.y as i32 - state.view.scroll as i32);
         }
+
+        state.library.images.insert(self.index, image);
     }
 }
 
