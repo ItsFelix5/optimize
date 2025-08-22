@@ -140,9 +140,8 @@ impl Library {
         self.images.push(Image {
             path: path.as_ref().to_path_buf(),
             name: path.as_ref().file_name()?.to_string_lossy().into(),
-            buffer: RefCell::new(None),
+            buffer: Arc::new(RwLock::new(None)),
             size: dimensions.into(),
-            loading: RefCell::new(false),
         });
         Some(())
     }
