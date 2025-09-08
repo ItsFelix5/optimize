@@ -1,5 +1,9 @@
 use crate::Vec2;
 use allocative::Allocative;
+use std::simd::Simd;
+
+#[allow(non_camel_case_types)]
+type f32x3 = Simd<f32, 3>;
 
 pub trait BufferView {
     fn size(&self) -> Vec2;
@@ -10,7 +14,7 @@ pub trait BufferView {
             return self.clone();
         }
         let mut buf = Buffer::new(size);
-        let mut tmp_line: Vec<(u8, u8, u8)> = vec![(0, 0, 0); self.size().x as usize];
+        let mut tmp_line: Vec<f32x3> = vec![f32x3::splat(0.0); self.size().x as usize];
 
         let weights_x = compute_weights(self.size().x, size.x);
         let weights_y = compute_weights(self.size().y, size.y);
@@ -18,27 +22,29 @@ pub trait BufferView {
             let (y_start, y_wts) = &weights_y[out_y as usize];
 
             for x in 0..self.size().x {
-                let mut acc = (0, 0, 0);
+                let mut acc = f32x3::splat(0.0);
                 for (i, &wy) in y_wts.iter().enumerate() {
                     let color = self.get(Vec2::from(x, y_start + i as u32));
-                    acc.0 += (((color >> 16) & 0xFF) as f32 * wy) as u8;
-                    acc.1 += (((color >> 8) & 0xFF) as f32 * wy) as u8;
-                    acc.2 += (((color) & 0xFF) as f32 * wy) as u8;
+                    let a = f32x3::from_array([
+                        ((color >> 16) & 0xFF) as f32,
+                        ((color >> 8) & 0xFF) as f32,
+                        ((color) & 0xFF) as f32,
+                    ]);
+                    acc += a * f32x3::splat(wy);
                 }
                 tmp_line[x as usize] = acc;
             }
 
             for out_x in 0..size.x {
                 let (x_start, x_wts) = &weights_x[out_x as usize];
-                let mut acc = (0, 0, 0);
+                let mut acc = f32x3::splat(0.0);
                 for (i, &wx) in x_wts.iter().enumerate() {
                     let color = tmp_line[*x_start as usize + i];
-                    acc.0 += (color.0 as f32 * wx) as u8;
-                    acc.1 += (color.1 as f32 * wx) as u8;
-                    acc.2 += (color.2 as f32 * wx) as u8;
+                    acc += color * f32x3::splat(wx);
                 }
+                let acc = acc.to_array();
                 buf.set(Vec2::from(out_x, out_y),
-                        (0xFF << 24) | ((acc.0 as u32) << 16) | ((acc.1 as u32) << 8) | acc.2 as u32,
+                        (0xFF << 24) | ((acc[0] as u32) << 16) | ((acc[1] as u32) << 8) | acc[2] as u32,
                 );
             }
         }
@@ -85,6 +91,7 @@ pub trait BufferView {
         buf
     }
 }
+
 
 #[derive(Allocative)]
 pub struct Buffer {
@@ -193,14 +200,12 @@ impl Buffer {
     }
 
     pub fn copy_from(&mut self, other: &impl BufferView, x: u32, y: i32) {
-        for j in 0..other.size().y as i32 {
-            if y + j > 0 {
-                for i in 0..other.size().x {
-                    self.set(
-                        Vec2::from(x + i, (y + j) as u32),
-                        other.get(Vec2::from(i, j as u32)),
-                    );
-                }
+        for j in -y.min(0)..other.size().y as i32 {
+            for i in 0..other.size().x {
+                self.set(
+                    Vec2::from(x + i, (y + j) as u32),
+                    other.get(Vec2::from(i, j as u32)),
+                );
             }
         }
     }

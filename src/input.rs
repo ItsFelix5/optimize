@@ -44,6 +44,7 @@ impl InputCallback for Input {
                     let mut image_data = 0.0;
                     let mut images = 0.0;
                     for line in flamegraph.write().lines() {
+                        println!("{}", line);
                         let count = usize::from_str(line.rsplit_once(' ').unwrap_or(("", "0")).1).unwrap_or(0) as f32 / 1024.0;
 
                         if line.contains("unused") {

@@ -19,18 +19,20 @@ pub struct Image {
 
 impl Image {
     pub fn get(&mut self, state: &State) -> Arc<RwLock<Option<Buffer>>> {
-        let _ = self.buffer.write().and_then(|mut buf| {
+        let _ = self.buffer.try_write().and_then(|mut buf| {
             if buf.is_none() {
                 *buf = Some(Buffer::empty());
 
-                let pico = state.config.pico;
-                let path = self.path.clone();
-                let arc = self.buffer.clone();
-                if pico {
-                    Image::load(pico, path, arc);
+                if state.config.pico {
+                    drop(buf);
+                    Image::load(state.config.pico, self.path.clone(), self.buffer.clone(), self.size);
                 } else {
+                    let pico = state.config.pico;
+                    let path = self.path.clone();
+                    let arc = self.buffer.clone();
+                    let size = self.size;
                     thread::spawn(move || {
-                        Image::load(pico, path, arc);
+                        Image::load(pico, path, arc, size);
                     });
                 }
             }
@@ -40,7 +42,7 @@ impl Image {
         self.buffer.clone()
     }
 
-    fn load(limits: bool, path: PathBuf, arc: Arc<RwLock<Option<Buffer>>>) {
+    fn load(limits: bool, path: PathBuf, arc: Arc<RwLock<Option<Buffer>>>, size: Vec2) {
         let mut image = match image::ImageReader::open(path).and_then(|img| img.with_guessed_format()) {
             Ok(reader) => reader,
             Err(err) => {
@@ -60,15 +62,7 @@ impl Image {
                 return;
             }
         };
-        let mut buf = match arc.write() {
-            Ok(buf) => buf,
-            Err(_) => return,
-        };
-
-        let (w, h) = (image.width() as f32, image.height() as f32);
-        let scale = (500.0 / w).min(500.0 / h);
-
-        *buf = Some(image.scale(Vec2::from((w * scale).round() as u32, (h * scale).round() as u32)));
+        let _ = arc.write().map(|mut buf| *buf = Some(image.scale(size)));
     }
 
     pub fn loaded(&self) -> bool {
@@ -137,11 +131,14 @@ impl Library {
             .with_guessed_format().ok()?
             .into_dimensions().ok()?;
 
+        let (w, h) = (dimensions.0 as f32, dimensions.1 as f32);
+        let scale = (500.0 / w).min(500.0 / h);
+
         self.images.push(Image {
             path: path.as_ref().to_path_buf(),
             name: path.as_ref().file_name()?.to_string_lossy().into(),
             buffer: Arc::new(RwLock::new(None)),
-            size: dimensions.into(),
+            size: Vec2::from((w * scale).round() as u32, (h * scale).round() as u32),
         });
         Some(())
     }

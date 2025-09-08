@@ -125,12 +125,12 @@ impl Widget for Image {
     fn draw(&mut self, state: &mut State) {
         let mut image = state.library.images.remove(self.index);
         let arc = image.get(state);
-        let buf = arc.read().unwrap();
-
-        if let Some(ref buf) = *buf {
-            state
-                .buffer
-                .copy_from(buf, self.pos.x, self.pos.y as i32 - state.view.scroll as i32);
+        if let Ok(buf) = arc.try_read() {
+            if let Some(ref buf) = *buf {
+                state
+                    .buffer
+                    .copy_from(buf, self.pos.x, self.pos.y as i32 - state.view.scroll as i32);
+            }
         }
 
         state.library.images.insert(self.index, image);

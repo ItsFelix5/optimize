@@ -1,3 +1,5 @@
+#![feature(portable_simd)]
+
 use crate::buffer::Buffer;
 use crate::config::Config;
 use crate::gui::View;
