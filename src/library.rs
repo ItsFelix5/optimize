@@ -1,13 +1,11 @@
 use crate::buffer::{Buffer, BufferView};
-use crate::{Vec2, State};
+use crate::{State, Vec2, GLOBAL_STATE};
+use allocative::Allocative;
 use image::{DynamicImage, GenericImageView, Limits};
-use std::cell::RefCell;
+use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
-use std::fs;
-use allocative::Allocative;
 use std::sync::{Arc, RwLock};
-use std::thread;
 
 #[derive(Allocative)]
 pub struct Image {
@@ -18,7 +16,7 @@ pub struct Image {
 }
 
 impl Image {
-    pub fn get(&mut self, state: &State) -> Arc<RwLock<Option<Buffer>>> {
+    pub fn get(&mut self, state: &mut State) -> Arc<RwLock<Option<Buffer>>> {
         let _ = self.buffer.try_write().and_then(|mut buf| {
             if buf.is_none() {
                 *buf = Some(Buffer::empty());
@@ -31,7 +29,7 @@ impl Image {
                     let path = self.path.clone();
                     let arc = self.buffer.clone();
                     let size = self.size;
-                    thread::spawn(move || {
+                    state.thread_pool.execute(move || {
                         Image::load(pico, path, arc, size);
                     });
                 }
@@ -43,7 +41,8 @@ impl Image {
     }
 
     fn load(limits: bool, path: PathBuf, arc: Arc<RwLock<Option<Buffer>>>, size: Vec2) {
-        let mut image = match image::ImageReader::open(path).and_then(|img| img.with_guessed_format()) {
+        let start = std::time::Instant::now();
+        let mut image = match image::ImageReader::open(&path).and_then(|img| img.with_guessed_format()) {
             Ok(reader) => reader,
             Err(err) => {
                 println!("Failed to open image: {}", err);
@@ -62,7 +61,22 @@ impl Image {
                 return;
             }
         };
+        let name = path.file_name().unwrap_or("unknown".as_ref());
+        let loaded = start.elapsed();
+        if loaded.as_secs() > 0 {
+            println!("Decoded {name:?} in {loaded:.2?}");
+        }
         let _ = arc.write().map(|mut buf| *buf = Some(image.scale(size)));
+        let scaled = start.elapsed() - loaded;
+        if scaled.as_secs() > 0 {
+            println!("Scaled {name:?} in {scaled:.2?}");
+        }
+
+        GLOBAL_STATE.write().unwrap().update();
+    }
+
+    pub fn unload(&mut self) {
+        let _ = self.buffer.write().map(|mut b| *b = None);
     }
 
     pub fn loaded(&self) -> bool {

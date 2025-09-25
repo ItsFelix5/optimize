@@ -1,14 +1,14 @@
-use crate::{Vec2, State};
+use crate::{State, Vec2};
 
 pub struct View {
-    widgets: Vec<Box<dyn Widget>>,
+    widgets: Vec<Box<dyn Widget + Send + Sync>>,
     pub height: u32,
     pub scroll: u32,
 }
 
 impl View {
     pub fn gallery() -> Self {
-        let mut widgets: Vec<Box<dyn Widget>> = Vec::new();
+        let mut widgets: Vec<Box<dyn Widget + Send + Sync>> = Vec::new();
         widgets.push(Box::new(Scrollbar::default()));
         widgets.push(Box::new(Gallery::default()));
         View {

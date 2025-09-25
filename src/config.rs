@@ -7,7 +7,7 @@ pub struct Config {
     pub text_color: u32,
     pub primary_color: u32,
     pub secondary_color: u32,
-    pub pico: bool
+    pub pico: bool,
 }
 
 impl Default for Config {
